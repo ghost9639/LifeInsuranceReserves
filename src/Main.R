@@ -3,23 +3,19 @@
 ## Might be necessary for the program to run on your device
 install.packages("tidyverse")
 install.packages("lifecontingencies")
-install.packages("ggplot2")
 install.packages("readxl")
 install.packages("here")
 install.packages("xts")
-install.packages("lubridate")
 install.packages("forecast")
 
 
 ## library calls for session
 suppressPackageStartupMessages
-library(tidyverse)            # eases suffering
+library(tidyverse)            # key utilities
 library(lifecontingencies)    # will be used for actual reserves modelling
-library(ggplot2)              # dataviz
 library(readxl)               # parses .xlsx files
 library(here)                 # provides robust file pathing for project based programs
 library(xts)                  # time series utility R
-library(lubridate)            # handles dates in R
 library(forecast)             # will be used for ARIMA
 
 ## if this fails, kill whatever R process was running previously and rerun Main.R, here will figure it out
