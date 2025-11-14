@@ -10,6 +10,7 @@ tramp
 
 # my api-keys :p
 id_ed25519
+.DS_Store
 
 # Org-mode
 .org-id-locations
