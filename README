@@ -1,6 +1,8 @@
 Life Insurance reserves are key to risk management in insurance companies, failure to adequately prepare for predictable and random losses can be otherwise fatal.
 This project simplifies modelling for a life insurance company, using modern actuarial models and real data.
 
+Full project [summary](/LifeInsuranceReserves.pdf) available in LifeInsuranceReserves.pdf
+
 The project simulates randomly generated portfolio of policyholders and estimates:
  - Their net premiums,
  - Life insurance reserves over time.

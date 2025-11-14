@@ -48,11 +48,6 @@ xtsYield <- xts(yieldDF[,-1], order.by = yieldDF$"years:")
 yieldDF
 
 
-## xts, support for Vasicek Model directly through quantmod, only used for ARIMA here
-## xtsYield <- xts(yieldDF[,-1], order.by = yieldDF$"years:")
-## ARfitYield <- Arima(xtsYield, order = c(1, 0, 0))
-
-
 
 ## Vasicek Model ==========================================================================
 ## model functions as a basic differential equation relating past to present interest rates
@@ -140,7 +135,7 @@ legend("topright", legend = c("Actual", "Predicted (Vasicek)"), col = c("black",
 
 
 ## our datasets are now mortalityDF, which holds the mortality table data from the ONS,
-## and simulation, which has 1000 inflation projections based on 2.5 year spot rates
+## and simulation, which has 7 inflation projections based on 2.5 year spot rates
 
 ## next step is making policyholders to run the model on ======================
 

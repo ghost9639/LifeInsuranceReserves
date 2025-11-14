@@ -1,0 +1,171 @@
+#+TITLE: Life Insurance Reserves Calculator
+#+AUTHOR: R
+#+OPTIONS: toc:nil prop:t
+#+LATEX_CLASS: article
+#+LATEX_CLASS_OPTIONS: [a4paper]
+#+LATEX_HEADER: \usepackage{times}
+#+LATEX_HEADER: \usepackage{amsmath}
+#+LATEX_HEADER: \usepackage[utf8]{inputenc}
+#+LATEX_HEADER: \usepackage{natbib}
+#+LATEX_HEADER: \usepackage{graphicx}
+#+OPTIONS: listings:t
+#+LATEX_HEADER: \usepackage{listings}
+#+LATEX_HEADER: \lstset{basicstyle=\ttfamily\small}
+#+PROPERTY: header-args :exports code
+
+# \end{titlepage}
+
+\flushleft
+
+* Project Objectives
+
+Using mortality tables, we want to project required life insurance reserves. To this end, we will make an industry-standard stochastic interest rates model, simulate a fictional portfolio of policyholders, and use CRAN's lifecontingencies package to make values for $A_xn$ and $a$.
+
+* The Datasets
+
+The first dataset is a mortality table from the Office of National Statistics (ONS) in the UK [cite:@ONSmort2025]. After cleaning it up using dplyr, we obtain mx, qx, lx, dx, and ex values for the UK. Our second dataset are the yield curves from the Bank of England [cite:@bofeYieldC2025]. For this investigation, we use the UK implied real spot curve since we want to model the real interest rate in the model, and assert that these are the real required amounts to reserve, which would need to match inflation in the future. In our yield curve dataset, we have implied real rates from 2.5 to 40 years.
+
+* Stochastic Interest Rate Modelling
+
+In this investigation, we will be using the Vasicek Model:
+
+\[dr_t = a(b - r)dt + \sigma d W_t\]
+
+Where a is a "speed of reversion", quantifying how fast interest rates return to equilibria, b operates as a long-term mean interest rate, \sigma acts as the constant of volatility, and $W_t$ is standard Brownian motion.
+
+\hfill \newline
+
+First we start by putting a lagged, differential, and original 2.5 year real yield curve rate into one dataset, and then regressing the change in the differential interest rate on the current rates. We can rewrite the Vasicek model as:
+
+\[dr_t = ab - ar \cdot dt + \sigma d W_t \]
+
+Compared to our regression model:
+
+\[dr_t = \beta_0 + \beta_1 r \cdot dt + \epsilon \]
+
+Which means that:
+
+$a$ is just the second coefficient sign swapped,
+$b$ is the first coefficient divided by $a$,
+and $s$ is the goodness of fit of the residuals.
+
+From our regression, we get that:
+
+\[d r_t = 1.04498(1 - 0.4537031 \text{ } r_t)dt + 0.014356 d W_t  \]
+
+We can now perform the Vasicek simulation
+
+#+NAME: Vasicek Model R Code
+#+CAPTION: Vasicek Model R Code
+#+BEGIN_SRC R :exports code :results none
+vasicek_sim <- function(a, b, s, size) {
+  dt <- 1
+  r <- numeric(size)
+  r[1] <- b
+
+  for (i in 2:size) {
+    dW_t <- rnorm(1, mean = 0, sd = sqrt(dt))
+    r[i] <- r[i-1] + a * (b - r[i-1]) * dt + s * dW_t
+  }
+
+  return(r)
+}
+#+END_SRC
+
+\hfill \newline
+After setting a seed, we can now run a simulation for the next 7 years of interest rates.
+
+
+#+DOWNLOADED: screenshot @ 2025-11-14 09:49:51
+#+CAPTION: Future Interest Rate Simulation
+[[file:Stochastic_Interest_Rate_Modelling/2025-11-14_09-49-51_screenshot.png]]
+Armed with a set of interest rate projections and mortality rates, all we need to predict insurance rate reserves for a portfolio of policyholders is a portfolio of policyholders. This can easily be simulated using R's random selection features and Monte Carlo sampling. For our portfolio of policyholders, we simulate:
+1) An ID,
+2) their age,
+3) their gender,
+4) smoking status,
+5) the term of their policy,
+6) whether they drive,
+7) their sum assured (using a log normal wealth simulation),
+8) the starting year of their terms (between 2014 and 2024).
+
+We can now calculate insurance premiums for every person on the portfolio using the lifecontingencies model. We know from the actuarial equivalence principle that:
+
+\[P = \frac{S \times A_x }{a_{[x]:n}}\]
+
+Since we have mortality tables, ages, and terms, we can very easily make a premium calculating function that uses lifecontingencies to calculate $A_x$ and $a_x$:
+
+#+NAME: Premium Function
+#+CAPTION: Premium Calculating function
+#+BEGIN_SRC R :exports code :results none
+premiumCalculator <- function(benefit, age, term, table) { 
+
+    ## lifecontingencies is happy to calculate A and a for us
+    A = Axn(actuarialtable = table, x = age, n = term)
+
+    a = axn(actuarialtable = table, x = age, n = term)
+    
+    Premium = benefit * A / a
+    return(Premium)   
+}
+#+END_SRC
+
+\hfill \newline
+
+Since we have both male and female mortality rates, we can also write a small utility to apply specific tables to both genders.
+
+This leaves us with the new portfolio:
+
+#+CAPTION: Policyholder Portfolio with Insurance Premia
+| ID | Age | Gender | Smoker | Policy Term | Driver | Sum Assured | Policy Start Year | Premium |
+|----+-----+--------+--------+-------------+--------+-------------+-------------------+---------|
+|  1 |  51 | female | yes    |          22 | driver |      131000 |              2024 |   177.0 |
+|  2 |  56 | male   | no     |          18 | driver |      146000 |              2022 |   295.0 |
+|  3 |  39 | male   | no     |          11 | driver |      129000 |              2014 |   413.0 |
+|  4 |  43 | female | no     |           5 | driver |      139000 |              2015 |    92.6 |
+|  5 |  23 | female | no     |          22 | driver |      209000 |              2023 |    26.1 |
+
+* Calculating General Reserve Requirements
+
+We now need to evaluate the value of the reserve, based off the principle that the value of the reserve is the future insurance benefits minus the discounted value of the insurance premia.
+
+\[V_x = S \times A_{x+t} - P_x \times a_{x+t}\]
+
+Where $V_x$ is the value of the reserve. We can therefore extremely easily write a quick Reserve Calculator in R:
+
+#+NAME: reserve calculator
+#+CAPTION: Reserve Calculator
+#+BEGIN_SRC R :export code
+
+  reserveCalculator <- function(benefit, age, term, t, premium, table) {
+      
+    remaining_term <- term - t # remaining policy duration
+    new_age <- age + t
+
+    if (remaining_term <= 0) {
+      return(0)
+    }
+
+    ## Same lifecontingencies utilities as before
+    A_remaining <- Axn(table, x = new_age, n = remaining_term) 
+    a_remaining <- axn(table, x = new_age, n = remaining_term)
+
+    reserve <- benefit * A_remaining - premium * a_remaining 
+    return(reserve)
+  }
+#+END_SRC
+
+\hfill \newline
+We can arbitrarily select a policy term of 10 to see the required reserves for the next ten years. Doing this, we find that:
+
+1) Ten year premium values: £363,600.20
+2) Ten year required reserves: £1,077,670
+
+(These may vary depending on how the function is used since the portfolio generation could vary depending on what functions are called after the seed is set.)
+
+
+\newpage
+
+* References
+#+print_bibliography: 
+
